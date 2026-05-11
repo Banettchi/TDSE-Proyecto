@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>DermAI — Análisis de Lesión</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+    <nav class="sidebar">
+        <div class="logo"><div class="logo-icon">🧬</div><div class="logo-text"><h1>DermAI</h1><p>Screening Platform</p></div></div>
+        <ul class="nav-menu">
+            <li class="nav-section">Principal</li>
+            <li class="nav-item"><a href="/dashboard" class="nav-link"><span class="icon">📊</span>Dashboard</a></li>
+            <li class="nav-item"><a href="/analysis" class="nav-link active"><span class="icon">🔬</span>Nuevo Análisis</a></li>
+            <li class="nav-item"><a href="/patients" class="nav-link"><span class="icon">👥</span>Pacientes</a></li>
+            <li class="nav-section">Información</li>
+            <li class="nav-item"><a href="/models-info" class="nav-link"><span class="icon">🧠</span>Modelos</a></li>
+            <li class="nav-item"><a href="/admin" class="nav-link"><span class="icon">⚙️</span>Administración</a></li>
+        </ul>
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.5rem;width:100%;justify-content:center" onclick="Auth.logout()">Cerrar Sesión</button>
+    </nav>
+    <main class="main-content">
+        <div class="page-header">
+            <div class="breadcrumb"><span>DermAI</span><span>›</span><span>Análisis</span></div>
+            <h2>🔬 Análisis de Lesión Cutánea</h2>
+            <p>Suba una imagen de la lesión para obtener análisis automatizado con IA</p>
+        </div>
+
+        <!-- STEP 1: Upload Form -->
+        <div id="stepUpload">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><span class="card-title">📷 Imagen de la Lesión</span></div>
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" id="imageInput" accept="image/*">
+                        <div class="icon">📸</div>
+                        <h3>Arrastre o seleccione una imagen</h3>
+                        <p>JPG, PNG — Máx 10MB — Dermatoscopio o smartphone</p>
+                    </div>
+                    <img id="preview" class="upload-preview" alt="Preview">
+                </div>
+                <div>
+                    <div class="card" style="margin-bottom:1rem">
+                        <div class="card-header"><span class="card-title">👤 Paciente</span></div>
+                        <div class="form-group">
+                            <label class="form-label">Seleccionar paciente</label>
+                            <select id="patientSelect" class="form-select"><option value="">Cargando pacientes...</option></select>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="showNewPatient()">+ Nuevo paciente</button>
+                        <div id="newPatientForm" style="display:none;margin-top:1rem">
+                            <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" id="npName" required></div>
+                            <div class="grid-2">
+                                <div class="form-group"><label class="form-label">Documento</label><input class="form-input" id="npDoc"></div>
+                                <div class="form-group"><label class="form-label">Fototipo (1-6)</label><select class="form-select" id="npFitz"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
+                            </div>
+                            <div class="form-group"><label class="form-label">Género</label><select class="form-select" id="npGender"><option value="">—</option><option>Masculino</option><option>Femenino</option><option>Otro</option></select></div>
+                            <button class="btn btn-success btn-sm" onclick="createPatient()">Guardar Paciente</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">⚙️ Configuración</span></div>
+                        <div class="form-group">
+                            <label class="form-label">Modelo de IA</label>
+                            <select id="modelSelect" class="form-select">
+                                <option value="">Automático (Model Router)</option>
+                                <option value="efficientnet">EfficientNet-B7 (Alta precisión)</option>
+                                <option value="resnet">ResNet-50 (Alto throughput)</option>
+                                <option value="vit">ViT-Base (Robustez cross-domain)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fuente de imagen</label>
+                            <select id="sourceSelect" class="form-select">
+                                <option value="smartphone">Smartphone</option>
+                                <option value="dermatoscope">Dermatoscopio</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Notas clínicas</label>
+                            <textarea class="form-textarea" id="notes" placeholder="Observaciones opcionales..."></textarea>
+                        </div>
+                        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center" onclick="runAnalysis()" id="analyzeBtn" disabled>
+                            🧠 Ejecutar Análisis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 2: Results -->
+        <div id="stepResults" style="display:none">
+            <button class="btn btn-secondary" onclick="resetAnalysis()" style="margin-bottom:1rem">← Nuevo análisis</button>
+            <!-- Risk Header -->
+            <div class="result-header" id="resultHeader"></div>
+            <div class="grid-2" style="margin-bottom:1.5rem">
+                <!-- Class Probabilities -->
+                <div class="card">
+                    <div class="card-header"><span class="card-title">📊 Probabilidades por Clase</span></div>
+                    <div id="probBars"></div>
+                </div>
+                <!-- ABCDE -->
+                <div class="card">
+                    <div class="card-header"><span class="card-title">🔤 Análisis ABCDE</span></div>
+                    <div id="abcdeGrid" class="abcde-grid"></div>
+                    <div style="margin-top:1rem">
+                        <div class="prob-bar"><span class="label">Puntaje Total</span><div class="bar"><div class="bar-fill" id="abcdeTotal" style="width:0%"></div></div><span class="value" id="abcdeTotalVal">—</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid-2" style="margin-bottom:1.5rem">
+                <!-- Grad-CAM -->
+                <div class="card">
+                    <div class="card-header"><span class="card-title">🔥 Mapa de Calor Grad-CAM</span><span class="card-subtitle">Regiones determinantes</span></div>
+                    <div id="gradcamContainer" style="text-align:center"><p style="color:var(--text-muted)">Sin Grad-CAM disponible</p></div>
+                </div>
+                <!-- Model Info & FHIR -->
+                <div class="card">
+                    <div class="card-header"><span class="card-title">🏥 Información Clínica</span></div>
+                    <div id="clinicalInfo"></div>
+                    <div style="margin-top:1rem">
+                        <button class="btn btn-secondary btn-sm" onclick="viewFHIR()">📋 Ver recurso FHIR R5</button>
+                    </div>
+                </div>
+            </div>
+            <!-- FHIR Modal -->
+            <div class="modal-overlay" id="fhirModal">
+                <div class="modal" style="max-width:700px">
+                    <div class="modal-header"><h3>📋 HL7 FHIR R5 — Observation</h3><button class="modal-close" onclick="closeFHIR()">×</button></div>
+                    <pre id="fhirJson" style="background:var(--bg-glass);padding:1rem;border-radius:var(--radius);font-size:.75rem;overflow:auto;max-height:500px;color:var(--text-secondary)"></pre>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!Auth.checkAuth()) location.href='/';
+Auth.initSidebar();
+let currentResult = null;
+
+// Load patients
+async function loadPatients() {
+    try {
+        const patients = await Auth.api('/patients/');
+        const sel = document.getElementById('patientSelect');
+        sel.innerHTML = '<option value="">— Seleccione paciente —</option>' +
+            patients.map(p => `<option value="${p.id}">${p.full_name} ${p.fitzpatrick_type ? '(Fototipo '+p.fitzpatrick_type+')' : ''}</option>`).join('');
+    } catch(e) { showToast('Error cargando pacientes','error'); }
+}
+loadPatients();
+
+// Image preview
+const imageInput = document.getElementById('imageInput');
+const preview = document.getElementById('preview');
+imageInput.addEventListener('change', () => {
+    const file = imageInput.files[0];
+    if (file) {
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+        checkReady();
+    }
+});
+document.getElementById('uploadZone').addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.classList.add('dragover'); });
+document.getElementById('uploadZone').addEventListener('dragleave', e => { e.currentTarget.classList.remove('dragover'); });
+document.getElementById('uploadZone').addEventListener('drop', e => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); imageInput.files = e.dataTransfer.files; imageInput.dispatchEvent(new Event('change')); });
+
+function checkReady() {
+    document.getElementById('analyzeBtn').disabled = !(imageInput.files[0] && document.getElementById('patientSelect').value);
+}
+document.getElementById('patientSelect').addEventListener('change', checkReady);
+
+function showNewPatient() { document.getElementById('newPatientForm').style.display = document.getElementById('newPatientForm').style.display === 'none' ? 'block' : 'none'; }
+
+async function createPatient() {
+    try {
+        const data = { full_name: document.getElementById('npName').value, document_number: document.getElementById('npDoc').value, gender: document.getElementById('npGender').value || null, fitzpatrick_type: parseInt(document.getElementById('npFitz').value) || null };
+        const p = await Auth.api('/patients/', { method: 'POST', body: data });
+        showToast('Paciente creado', 'success');
+        await loadPatients();
+        document.getElementById('patientSelect').value = p.id;
+        document.getElementById('newPatientForm').style.display = 'none';
+        checkReady();
+    } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function runAnalysis() {
+    const form = new FormData();
+    form.append('patient_id', document.getElementById('patientSelect').value);
+    form.append('image', imageInput.files[0]);
+    form.append('image_source', document.getElementById('sourceSelect').value);
+    const model = document.getElementById('modelSelect').value;
+    if (model) form.append('model_preference', model);
+    const notes = document.getElementById('notes').value;
+    if (notes) form.append('notes', notes);
+
+    showLoading('Analizando lesión cutánea...');
+    try {
+        currentResult = await Auth.api('/analysis/', { method: 'POST', body: form });
+        renderResults(currentResult);
+        document.getElementById('stepUpload').style.display = 'none';
+        document.getElementById('stepResults').style.display = 'block';
+        showToast('Análisis completado', 'success');
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+    finally { hideLoading(); }
+}
+
+function renderResults(r) {
+    const riskMap = {bajo:'low',medio:'medium',alto:'high',muy_alto:'very-high'};
+    const riskLabels = {bajo:'BAJO',medio:'MEDIO',alto:'ALTO',muy_alto:'MUY ALTO'};
+    // Header
+    document.getElementById('resultHeader').innerHTML = `
+        <div class="result-risk-circle ${riskMap[r.risk_level]}"><span style="font-size:.6rem">RIESGO</span>${riskLabels[r.risk_level]}</div>
+        <div style="flex:1">
+            <h3>${r.predicted_class_name}</h3>
+            <p style="color:var(--text-secondary);margin:.25rem 0">Paciente: ${r.patient_name} | Confianza: ${(r.confidence*100).toFixed(1)}% | ${r.is_malignant ? '<span style="color:var(--danger)">⚠ Sospecha de malignidad</span>' : '<span style="color:var(--success)">Sin sospecha de malignidad</span>'}</p>
+            <p style="font-size:.8rem;color:var(--text-muted)">Modelo: ${r.model_display_name} — ${r.model_selection_reason}</p>
+            <p style="font-size:.8rem;color:var(--text-muted)">Tiempo de inferencia: ${r.inference_time_ms.toFixed(0)}ms | Calidad: ${(r.image_quality_score*100).toFixed(0)}%</p>
+        </div>`;
+
+    // Probabilities
+    const probEl = document.getElementById('probBars');
+    const probs = Object.entries(r.class_probabilities).sort((a,b) => b[1]-a[1]);
+    probEl.innerHTML = probs.map(([name, val]) => {
+        const pct = (val*100).toFixed(1);
+        const isMel = name.includes('Melanoma');
+        return `<div class="prob-bar"><span class="label">${name}</span><div class="bar"><div class="bar-fill" style="width:${pct}%;${isMel?'background:var(--gradient-danger)':''}"></div></div><span class="value">${pct}%</span></div>`;
+    }).join('');
+
+    // ABCDE
+    if (r.abcde_scores) {
+        const s = r.abcde_scores;
+        const items = [
+            {letter:'A',name:'Asimetría',score:s.asymmetry,color:'#3b82f6'},
+            {letter:'B',name:'Bordes',score:s.border,color:'#8b5cf6'},
+            {letter:'C',name:'Color',score:s.color,color:'#06b6d4'},
+            {letter:'D',name:'Diámetro',score:s.diameter,unit:'mm',color:'#f59e0b'},
+            {letter:'E',name:'Evolución',score:s.evolution,color:'#ef4444'}
+        ];
+        document.getElementById('abcdeGrid').innerHTML = items.map(i => {
+            const val = i.score !== null && i.score !== undefined ? (i.unit ? i.score : (i.score*100).toFixed(0)+'%') : 'N/A';
+            const pct = i.unit ? Math.min(100, i.score/12*100) : (i.score||0)*100;
+            return `<div class="abcde-item"><div class="abcde-letter">${i.letter}</div><div class="abcde-name">${i.name}</div><div class="abcde-score">${val}</div><div class="abcde-bar"><div class="abcde-bar-fill" style="width:${pct}%;background:${i.color}"></div></div></div>`;
+        }).join('');
+        const total = s.total_score || 0;
+        document.getElementById('abcdeTotal').style.width = (total*100)+'%';
+        document.getElementById('abcdeTotal').style.background = total > 0.7 ? 'var(--gradient-danger)' : total > 0.4 ? 'var(--warning)' : 'var(--success)';
+        document.getElementById('abcdeTotalVal').textContent = (total*100).toFixed(1)+'%';
+    }
+
+    // Grad-CAM
+    if (r.gradcam_image_path) {
+        const fname = r.gradcam_image_path.split(/[\\/]/).pop();
+        document.getElementById('gradcamContainer').innerHTML = `<img src="/uploads/${fname}" style="max-width:100%;border-radius:var(--radius)" alt="Grad-CAM">`;
+    }
+
+    // Clinical info
+    document.getElementById('clinicalInfo').innerHTML = `
+        <table style="width:100%"><tbody>
+            <tr><td style="color:var(--text-muted)">Modelo</td><td>${r.model_display_name}</td></tr>
+            <tr><td style="color:var(--text-muted)">FHIR Observation ID</td><td style="font-size:.75rem">${r.fhir_observation_id || 'N/A'}</td></tr>
+            <tr><td style="color:var(--text-muted)">FHIR Válido</td><td>${r.fhir_valid ? '✓ Conforme R5' : '✗ Errores'}</td></tr>
+            <tr><td style="color:var(--text-muted)">Dispositivo</td><td>${r.device || 'cpu'}</td></tr>
+            <tr><td style="color:var(--text-muted)">Calidad Imagen</td><td>${(r.image_quality_score*100).toFixed(0)}%</td></tr>
+        </tbody></table>`;
+}
+
+async function viewFHIR() {
+    if (!currentResult) return;
+    try {
+        const fhir = await Auth.api(`/analysis/${currentResult.analysis_id}/fhir`);
+        document.getElementById('fhirJson').textContent = JSON.stringify(fhir, null, 2);
+        document.getElementById('fhirModal').classList.add('active');
+    } catch(e) { showToast(e.message,'error'); }
+}
+function closeFHIR() { document.getElementById('fhirModal').classList.remove('active'); }
+
+function resetAnalysis() {
+    currentResult = null;
+    document.getElementById('stepUpload').style.display = 'block';
+    document.getElementById('stepResults').style.display = 'none';
+    imageInput.value = '';
+    preview.style.display = 'none';
+    document.getElementById('analyzeBtn').disabled = true;
+}
+</script>
+</body>
+</html>

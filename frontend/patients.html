@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>DermAI — Pacientes</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+    <nav class="sidebar">
+        <div class="logo"><div class="logo-icon">🧬</div><div class="logo-text"><h1>DermAI</h1><p>Screening Platform</p></div></div>
+        <ul class="nav-menu">
+            <li class="nav-section">Principal</li>
+            <li class="nav-item"><a href="/dashboard" class="nav-link"><span class="icon">📊</span>Dashboard</a></li>
+            <li class="nav-item"><a href="/analysis" class="nav-link"><span class="icon">🔬</span>Nuevo Análisis</a></li>
+            <li class="nav-item"><a href="/patients" class="nav-link active"><span class="icon">👥</span>Pacientes</a></li>
+            <li class="nav-section">Información</li>
+            <li class="nav-item"><a href="/models-info" class="nav-link"><span class="icon">🧠</span>Modelos</a></li>
+            <li class="nav-item"><a href="/admin" class="nav-link"><span class="icon">⚙️</span>Administración</a></li>
+        </ul>
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.5rem;width:100%;justify-content:center" onclick="Auth.logout()">Cerrar Sesión</button>
+    </nav>
+    <main class="main-content">
+        <div class="page-header"><div class="breadcrumb"><span>DermAI</span><span>›</span><span>Pacientes</span></div><h2>👥 Gestión de Pacientes</h2><p>Pacientes registrados en su institución</p></div>
+        <div class="card" style="margin-bottom:1.5rem">
+            <div class="card-header"><span class="card-title">Buscar Pacientes</span><button class="btn btn-primary btn-sm" onclick="document.getElementById('addModal').classList.add('active')">+ Nuevo Paciente</button></div>
+            <input class="form-input" id="searchInput" placeholder="Buscar por nombre..." oninput="searchPatients(this.value)">
+        </div>
+        <div class="table-container"><table><thead><tr><th>Nombre</th><th>Documento</th><th>Género</th><th>Fototipo</th><th>Ciudad</th><th>Registrado</th><th>Acciones</th></tr></thead><tbody id="patientsTable"><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Cargando...</td></tr></tbody></table></div>
+        <!-- History Panel -->
+        <div id="historyPanel" style="display:none;margin-top:1.5rem">
+            <div class="card">
+                <div class="card-header"><span class="card-title" id="historyTitle">Historial</span><button class="btn btn-secondary btn-sm" onclick="document.getElementById('historyPanel').style.display='none'">Cerrar</button></div>
+                <div class="table-container"><table><thead><tr><th>Fecha</th><th>Modelo</th><th>Diagnóstico</th><th>Confianza</th><th>Riesgo</th></tr></thead><tbody id="historyTable"></tbody></table></div>
+            </div>
+        </div>
+        <!-- Add Patient Modal -->
+        <div class="modal-overlay" id="addModal">
+            <div class="modal">
+                <div class="modal-header"><h3>Nuevo Paciente</h3><button class="modal-close" onclick="document.getElementById('addModal').classList.remove('active')">×</button></div>
+                <form id="addForm">
+                    <div class="form-group"><label class="form-label">Nombre completo *</label><input class="form-input" id="addName" required></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label class="form-label">Tipo documento</label><select class="form-select" id="addDocType"><option>CC</option><option>TI</option><option>CE</option><option>PP</option></select></div>
+                        <div class="form-group"><label class="form-label">Número</label><input class="form-input" id="addDocNum"></div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group"><label class="form-label">Género</label><select class="form-select" id="addGender"><option value="">—</option><option>Masculino</option><option>Femenino</option><option>Otro</option></select></div>
+                        <div class="form-group"><label class="form-label">Fototipo Fitzpatrick</label><select class="form-select" id="addFitz"><option value="">—</option><option value="1">I — Muy clara</option><option value="2">II — Clara</option><option value="3">III — Intermedia</option><option value="4">IV — Oliva</option><option value="5">V — Morena</option><option value="6">VI — Oscura</option></select></div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group"><label class="form-label">Ciudad</label><input class="form-input" id="addCity"></div>
+                        <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="addPhone"></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="addEmail"></div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Registrar Paciente</button>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!Auth.checkAuth()) location.href='/';
+Auth.initSidebar();
+let debounce;
+
+async function loadPatients(search) {
+    try {
+        const q = search ? `?search=${encodeURIComponent(search)}` : '';
+        const patients = await Auth.api('/patients/' + q);
+        const tbody = document.getElementById('patientsTable');
+        if (!patients.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">No se encontraron pacientes</td></tr>'; return; }
+        tbody.innerHTML = patients.map(p => `<tr>
+            <td><strong>${p.full_name}</strong></td>
+            <td>${p.document_number || '—'}</td>
+            <td>${p.gender || '—'}</td>
+            <td>${p.fitzpatrick_type ? 'Tipo ' + p.fitzpatrick_type : '—'}</td>
+            <td>${p.city || '—'}</td>
+            <td>${formatDate(p.created_at)}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="viewHistory('${p.id}','${p.full_name}')">📋 Historial</button></td>
+        </tr>`).join('');
+    } catch(e) { showToast(e.message, 'error'); }
+}
+loadPatients();
+
+function searchPatients(q) { clearTimeout(debounce); debounce = setTimeout(() => loadPatients(q), 300); }
+
+async function viewHistory(id, name) {
+    document.getElementById('historyTitle').textContent = `Historial — ${name}`;
+    document.getElementById('historyPanel').style.display = 'block';
+    try {
+        const history = await Auth.api(`/patients/${id}/history`);
+        const tbody = document.getElementById('historyTable');
+        if (!history.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Sin análisis previos</td></tr>'; return; }
+        tbody.innerHTML = history.map(a => `<tr>
+            <td>${formatDate(a.created_at)}</td>
+            <td><span class="badge badge-info">${a.model_used}</span></td>
+            <td>${a.predicted_class_name}</td>
+            <td>${(a.confidence*100).toFixed(1)}%</td>
+            <td>${riskBadge(a.risk_level)}</td>
+        </tr>`).join('');
+    } catch(e) { showToast(e.message,'error'); }
+}
+
+document.getElementById('addForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        await Auth.api('/patients/', { method: 'POST', body: {
+            full_name: document.getElementById('addName').value,
+            document_type: document.getElementById('addDocType').value,
+            document_number: document.getElementById('addDocNum').value,
+            gender: document.getElementById('addGender').value || null,
+            fitzpatrick_type: parseInt(document.getElementById('addFitz').value) || null,
+            city: document.getElementById('addCity').value || null,
+            phone: document.getElementById('addPhone').value || null,
+            email: document.getElementById('addEmail').value || null
+        }});
+        showToast('Paciente registrado','success');
+        document.getElementById('addModal').classList.remove('active');
+        e.target.reset();
+        loadPatients();
+    } catch(e) { showToast(e.message,'error'); }
+});
+</script>
+</body>
+</html>

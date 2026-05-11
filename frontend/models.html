@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>DermAI — Modelos de IA</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+    <nav class="sidebar">
+        <div class="logo"><div class="logo-icon">🧬</div><div class="logo-text"><h1>DermAI</h1><p>Screening Platform</p></div></div>
+        <ul class="nav-menu">
+            <li class="nav-section">Principal</li>
+            <li class="nav-item"><a href="/dashboard" class="nav-link"><span class="icon">📊</span>Dashboard</a></li>
+            <li class="nav-item"><a href="/analysis" class="nav-link"><span class="icon">🔬</span>Nuevo Análisis</a></li>
+            <li class="nav-item"><a href="/patients" class="nav-link"><span class="icon">👥</span>Pacientes</a></li>
+            <li class="nav-section">Información</li>
+            <li class="nav-item"><a href="/models-info" class="nav-link active"><span class="icon">🧠</span>Modelos</a></li>
+            <li class="nav-item"><a href="/admin" class="nav-link"><span class="icon">⚙️</span>Administración</a></li>
+        </ul>
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.5rem;width:100%;justify-content:center" onclick="Auth.logout()">Cerrar Sesión</button>
+    </nav>
+    <main class="main-content">
+        <div class="page-header"><div class="breadcrumb"><span>DermAI</span><span>›</span><span>Modelos</span></div><h2>🧠 Motor de Inferencia Multimodelo</h2><p>Comparación de arquitecturas de deep learning disponibles</p></div>
+        <div class="grid-3" id="modelCards"></div>
+        <div class="card" style="margin-top:1.5rem">
+            <div class="card-header"><span class="card-title">📊 Métricas de Uso por Modelo</span></div>
+            <div id="modelMetrics"><p style="color:var(--text-muted)">Cargando métricas...</p></div>
+        </div>
+        <div class="card" style="margin-top:1.5rem">
+            <div class="card-header"><span class="card-title">⚖️ Reporte de Equidad — Módulo Fitzpatrick</span></div>
+            <div id="equityReport"><p style="color:var(--text-muted)">Cargando...</p></div>
+        </div>
+        <!-- Reference Table -->
+        <div class="card" style="margin-top:1.5rem">
+            <div class="card-header"><span class="card-title">📑 Comparación de Arquitecturas (Documento Técnico)</span></div>
+            <div class="table-container"><table><thead><tr><th>Arquitectura</th><th>AUC-ROC</th><th>Sensibilidad</th><th>Especificidad</th><th>F1</th><th>Lat. p95 (s)</th><th>Throughput</th><th>Costo/inf.</th></tr></thead><tbody>
+                <tr><td><strong>EfficientNet-B7</strong></td><td>0.891</td><td>0.873</td><td>0.841</td><td>0.857</td><td>3.82</td><td>312 req/min</td><td>$0.0041</td></tr>
+                <tr><td><strong>ResNet-50</strong></td><td>0.853</td><td>0.824</td><td>0.812</td><td>0.818</td><td>1.94</td><td>487 req/min</td><td>$0.0018</td></tr>
+                <tr><td><strong>ViT-Base</strong></td><td>0.867</td><td>0.849</td><td>0.821</td><td>0.835</td><td>2.61</td><td>401 req/min</td><td>$0.0027</td></tr>
+            </tbody></table></div>
+        </div>
+    </main>
+</div>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!Auth.checkAuth()) location.href='/';
+Auth.initSidebar();
+
+const modelDescriptions = {
+    efficientnet: { icon: '🎯', desc: 'Optimiza profundidad, anchura y resolución simultáneamente. Mayor AUC a costa de mayor latencia.', color: '#3b82f6', paper: 'Tan & Le (2019)' },
+    resnet: { icon: '⚡', desc: 'Conexiones residuales que permiten entrenamiento de redes profundas sin degradación del gradiente.', color: '#10b981', paper: 'He et al. (2016)' },
+    vit: { icon: '🔮', desc: 'Atención visual mediante transformers. Captura patrones de textura que las CNN no detectan eficientemente.', color: '#8b5cf6', paper: 'Dosovitskiy et al. (2021)' }
+};
+
+async function loadModels() {
+    try {
+        const data = await Auth.api('/models/available');
+        document.getElementById('modelCards').innerHTML = data.models.map(m => {
+            const d = modelDescriptions[m.name] || {};
+            return `<div class="card" style="border-top:3px solid ${d.color||'var(--accent)'}">
+                <div style="font-size:2rem;margin-bottom:.5rem">${d.icon||'🧠'}</div>
+                <h3 style="font-size:1.1rem;margin-bottom:.5rem">${m.display_name}</h3>
+                <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:1rem">${d.desc||''}</p>
+                <div style="font-size:.8rem;line-height:1.8">
+                    <div>AUC: <strong>${m.auc_range}</strong></div>
+                    <div>Latencia: <strong>${m.latency_range}</strong></div>
+                    <div>Contexto: <strong>${m.context}</strong></div>
+                    <div>Input: <strong>${m.input_size}×${m.input_size}</strong></div>
+                    <div>Estado: ${m.loaded ? '<span style="color:var(--success)">✓ Cargado</span>' : '<span style="color:var(--text-muted)">Bajo demanda</span>'}</div>
+                    <div style="margin-top:.5rem;font-size:.7rem;color:var(--text-muted)">${d.paper||''}</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Model metrics
+        const metrics = await Auth.api('/dashboard/models');
+        document.getElementById('modelMetrics').innerHTML = '<div class="table-container"><table><thead><tr><th>Modelo</th><th>Inferencias</th><th>Confianza Prom.</th><th>Tiempo Prom.</th><th>Por Defecto</th></tr></thead><tbody>' +
+            metrics.models.map(m => `<tr><td><strong>${m.display_name}</strong></td><td>${m.total_inferences}</td><td>${(m.avg_confidence*100).toFixed(1)}%</td><td>${m.avg_inference_time_ms.toFixed(0)}ms</td><td>${m.is_default ? '<span class="badge badge-info">Defecto</span>' : '—'}</td></tr>`).join('') +
+            '</tbody></table></div>';
+
+        // Equity
+        const equity = await Auth.api('/dashboard/equity');
+        let eqHtml = `<p style="font-size:.85rem;margin-bottom:1rem;color:${equity.total_alerts > 0 ? 'var(--danger)' : 'var(--success)'}">
+            ${equity.recommendation}</p>`;
+        if (equity.metrics_by_model.length) {
+            eqHtml += '<div class="table-container"><table><thead><tr><th>Modelo</th><th>Grupo Fitzpatrick</th><th>Muestras</th><th>Confianza Prom.</th><th>Tasa Alto Riesgo</th><th>Alerta</th></tr></thead><tbody>' +
+                equity.metrics_by_model.map(m => `<tr><td>${m.model_name}</td><td>${m.fitzpatrick_group}</td><td>${m.total_samples}</td><td>${(m.avg_confidence*100).toFixed(1)}%</td><td>${(m.high_risk_rate*100).toFixed(1)}%</td><td>${m.alert ? '<span class="badge badge-high">⚠ Alerta</span>' : '<span class="badge badge-low">OK</span>'}</td></tr>`).join('') +
+                '</tbody></table></div>';
+        }
+        document.getElementById('equityReport').innerHTML = eqHtml;
+    } catch(e) { showToast(e.message,'error'); }
+}
+loadModels();
+</script>
+</body>
+</html>

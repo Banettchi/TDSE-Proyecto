@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>DermAI — Administración</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+    <nav class="sidebar">
+        <div class="logo"><div class="logo-icon">🧬</div><div class="logo-text"><h1>DermAI</h1><p>Screening Platform</p></div></div>
+        <ul class="nav-menu">
+            <li class="nav-section">Principal</li>
+            <li class="nav-item"><a href="/dashboard" class="nav-link"><span class="icon">📊</span>Dashboard</a></li>
+            <li class="nav-item"><a href="/analysis" class="nav-link"><span class="icon">🔬</span>Nuevo Análisis</a></li>
+            <li class="nav-item"><a href="/patients" class="nav-link"><span class="icon">👥</span>Pacientes</a></li>
+            <li class="nav-section">Información</li>
+            <li class="nav-item"><a href="/models-info" class="nav-link"><span class="icon">🧠</span>Modelos</a></li>
+            <li class="nav-item"><a href="/admin" class="nav-link active"><span class="icon">⚙️</span>Administración</a></li>
+        </ul>
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.5rem;width:100%;justify-content:center" onclick="Auth.logout()">Cerrar Sesión</button>
+    </nav>
+    <main class="main-content">
+        <div class="page-header"><div class="breadcrumb"><span>DermAI</span><span>›</span><span>Administración</span></div><h2>⚙️ Administración del Tenant</h2><p>Configuración de la institución, usuarios y auditoría</p></div>
+        <div class="grid-2" style="margin-bottom:1.5rem">
+            <!-- Tenant Config -->
+            <div class="card">
+                <div class="card-header"><span class="card-title">🏛️ Configuración del Tenant</span></div>
+                <div id="tenantInfo"><p style="color:var(--text-muted)">Cargando...</p></div>
+                <form id="configForm" style="margin-top:1rem">
+                    <div class="form-group"><label class="form-label">Modelo por defecto</label><select class="form-select" id="cfgModel"><option value="efficientnet">EfficientNet-B7</option><option value="resnet">ResNet-50</option><option value="vit">ViT-Base</option></select></div>
+                    <div class="form-group"><label class="form-label">Umbral de riesgo</label><input type="number" class="form-input" id="cfgThreshold" min="0" max="1" step="0.05" value="0.5"></div>
+                    <div class="form-group"><label class="form-label">Rate limit (req/min)</label><input type="number" class="form-input" id="cfgRate" min="10" max="1000" value="60"></div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Guardar Configuración</button>
+                </form>
+            </div>
+            <!-- Users -->
+            <div class="card">
+                <div class="card-header"><span class="card-title">👤 Usuarios</span><button class="btn btn-primary btn-sm" onclick="document.getElementById('userModal').classList.add('active')">+ Nuevo</button></div>
+                <div class="table-container"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th></tr></thead><tbody id="usersTable"><tr><td colspan="3" style="color:var(--text-muted)">Cargando...</td></tr></tbody></table></div>
+            </div>
+        </div>
+        <!-- Audit Log -->
+        <div class="card">
+            <div class="card-header"><span class="card-title">📜 Log de Auditoría</span><span class="card-subtitle">Registro inmutable de operaciones</span></div>
+            <div class="table-container"><table><thead><tr><th>Timestamp</th><th>Acción</th><th>Recurso</th><th>ID Recurso</th></tr></thead><tbody id="auditTable"><tr><td colspan="4" style="color:var(--text-muted)">Cargando...</td></tr></tbody></table></div>
+        </div>
+        <!-- Add User Modal -->
+        <div class="modal-overlay" id="userModal">
+            <div class="modal">
+                <div class="modal-header"><h3>Nuevo Usuario</h3><button class="modal-close" onclick="document.getElementById('userModal').classList.remove('active')">×</button></div>
+                <form id="addUserForm">
+                    <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" id="uName" required></div>
+                    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="uEmail" required></div>
+                    <div class="form-group"><label class="form-label">Contraseña</label><input type="password" class="form-input" id="uPass" required></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label class="form-label">Rol</label><select class="form-select" id="uRole"><option value="doctor">Doctor</option><option value="operator">Operador</option><option value="admin">Admin</option></select></div>
+                        <div class="form-group"><label class="form-label">Especialidad</label><input class="form-input" id="uSpec"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Crear Usuario</button>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!Auth.checkAuth()) location.href='/';
+Auth.initSidebar();
+
+async function loadAdmin() {
+    try {
+        const tenant = await Auth.api('/tenants/current');
+        document.getElementById('tenantInfo').innerHTML = `<table style="width:100%"><tbody>
+            <tr><td style="color:var(--text-muted)">Nombre</td><td><strong>${tenant.name}</strong></td></tr>
+            <tr><td style="color:var(--text-muted)">Tipo</td><td>${tenant.type}</td></tr>
+            <tr><td style="color:var(--text-muted)">NIT</td><td>${tenant.nit || '—'}</td></tr>
+            <tr><td style="color:var(--text-muted)">Ciudad</td><td>${tenant.city || '—'}</td></tr>
+            <tr><td style="color:var(--text-muted)">ID</td><td style="font-size:.7rem">${tenant.id}</td></tr>
+        </tbody></table>`;
+        document.getElementById('cfgModel').value = tenant.default_model;
+    } catch(e) {}
+
+    try {
+        const users = await Auth.api('/users/');
+        document.getElementById('usersTable').innerHTML = users.map(u => `<tr><td>${u.full_name}</td><td><span class="badge badge-info">${u.role}</span></td><td>${u.email}</td></tr>`).join('');
+    } catch(e) { document.getElementById('usersTable').innerHTML = '<tr><td colspan="3" style="color:var(--text-muted)">Sin permisos de administrador</td></tr>'; }
+
+    try {
+        const logs = await Auth.api('/dashboard/audit');
+        document.getElementById('auditTable').innerHTML = logs.map(l => `<tr><td>${formatDate(l.timestamp)}</td><td><span class="badge badge-info">${l.action}</span></td><td>${l.resource_type || '—'}</td><td style="font-size:.7rem">${l.resource_id ? l.resource_id.substring(0,8)+'...' : '—'}</td></tr>`).join('') || '<tr><td colspan="4" style="color:var(--text-muted)">Sin registros</td></tr>';
+    } catch(e) { document.getElementById('auditTable').innerHTML = '<tr><td colspan="4" style="color:var(--text-muted)">Sin permisos</td></tr>'; }
+}
+loadAdmin();
+
+document.getElementById('configForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        await Auth.api('/tenants/config', { method: 'PUT', body: { default_model: document.getElementById('cfgModel').value, risk_threshold: parseFloat(document.getElementById('cfgThreshold').value), max_requests_per_minute: parseInt(document.getElementById('cfgRate').value) }});
+        showToast('Configuración actualizada','success');
+    } catch(e) { showToast(e.message,'error'); }
+});
+
+document.getElementById('addUserForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+        await Auth.api('/users/', { method: 'POST', body: { email: document.getElementById('uEmail').value, password: document.getElementById('uPass').value, full_name: document.getElementById('uName').value, role: document.getElementById('uRole').value, specialty: document.getElementById('uSpec').value || null }});
+        showToast('Usuario creado','success');
+        document.getElementById('userModal').classList.remove('active');
+        loadAdmin();
+    } catch(e) { showToast(e.message,'error'); }
+});
+</script>
+</body>
+</html>

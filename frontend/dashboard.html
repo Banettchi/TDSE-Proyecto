@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>DermAI — Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="logo"><div class="logo-icon">🧬</div><div class="logo-text"><h1>DermAI</h1><p>Screening Platform</p></div></div>
+        <ul class="nav-menu">
+            <li class="nav-section">Principal</li>
+            <li class="nav-item"><a href="/dashboard" class="nav-link active"><span class="icon">📊</span>Dashboard</a></li>
+            <li class="nav-item"><a href="/analysis" class="nav-link"><span class="icon">🔬</span>Nuevo Análisis</a></li>
+            <li class="nav-item"><a href="/patients" class="nav-link"><span class="icon">👥</span>Pacientes</a></li>
+            <li class="nav-section">Información</li>
+            <li class="nav-item"><a href="/models-info" class="nav-link"><span class="icon">🧠</span>Modelos</a></li>
+            <li class="nav-item"><a href="/admin" class="nav-link"><span class="icon">⚙️</span>Administración</a></li>
+        </ul>
+        <div class="user-info" id="userInfo"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.5rem;width:100%;justify-content:center" onclick="Auth.logout()">Cerrar Sesión</button>
+    </nav>
+    <main class="main-content">
+        <div class="page-header">
+            <div class="breadcrumb"><span>DermAI</span><span>›</span><span>Dashboard</span></div>
+            <h2>Panel de Control</h2>
+            <p id="tenantName">Cargando...</p>
+        </div>
+        <!-- Stats -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card blue"><div class="stat-icon">🔬</div><div class="stat-value" id="statAnalyses">—</div><div class="stat-label">Análisis Totales</div></div>
+            <div class="stat-card green"><div class="stat-icon">👥</div><div class="stat-value" id="statPatients">—</div><div class="stat-label">Pacientes</div></div>
+            <div class="stat-card orange"><div class="stat-icon">⚠️</div><div class="stat-value" id="statHighRisk">—</div><div class="stat-label">Alto Riesgo</div></div>
+            <div class="stat-card purple"><div class="stat-icon">🎯</div><div class="stat-value" id="statConfidence">—</div><div class="stat-label">Confianza Promedio</div></div>
+        </div>
+        <div class="grid-2" style="margin-bottom:1.5rem">
+            <!-- Risk Distribution -->
+            <div class="card">
+                <div class="card-header"><span class="card-title">Distribución de Riesgo</span></div>
+                <div id="riskDist"></div>
+            </div>
+            <!-- Model Distribution -->
+            <div class="card">
+                <div class="card-header"><span class="card-title">Uso por Modelo</span></div>
+                <div id="modelDist"></div>
+            </div>
+        </div>
+        <!-- Recent Analyses -->
+        <div class="card">
+            <div class="card-header"><span class="card-title">Análisis Recientes</span><a href="/analysis" class="btn btn-primary btn-sm">+ Nuevo Análisis</a></div>
+            <div class="table-container"><table><thead><tr><th>Paciente</th><th>Modelo</th><th>Diagnóstico</th><th>Confianza</th><th>Riesgo</th><th>Fecha</th></tr></thead><tbody id="recentTable"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">Cargando...</td></tr></tbody></table></div>
+        </div>
+    </main>
+</div>
+<script src="/static/js/auth.js"></script>
+<script>
+if (!Auth.checkAuth()) location.href='/';
+Auth.initSidebar();
+
+async function loadDashboard() {
+    try {
+        const stats = await Auth.api('/dashboard/stats');
+        document.getElementById('tenantName').textContent = stats.tenant_name + ' — Modelo: ' + stats.tenant_model;
+        document.getElementById('statAnalyses').textContent = stats.total_analyses;
+        document.getElementById('statPatients').textContent = stats.total_patients;
+        document.getElementById('statHighRisk').textContent = stats.high_risk_count;
+        document.getElementById('statConfidence').textContent = (stats.avg_confidence * 100).toFixed(1) + '%';
+
+        // Risk distribution bars
+        const riskEl = document.getElementById('riskDist');
+        const total = stats.total_analyses || 1;
+        const riskLabels = {bajo:'Bajo',medio:'Medio',alto:'Alto',muy_alto:'Muy Alto'};
+        const riskColors = {bajo:'var(--success)',medio:'var(--warning)',alto:'var(--danger)',muy_alto:'#dc2626'};
+        riskEl.innerHTML = Object.entries(riskLabels).map(([k,v]) => {
+            const count = (stats.risk_distribution || {})[k] || 0;
+            const pct = (count/total*100).toFixed(1);
+            return `<div class="prob-bar"><span class="label">${v}</span><div class="bar"><div class="bar-fill" style="width:${pct}%;background:${riskColors[k]}"></div></div><span class="value">${count}</span></div>`;
+        }).join('');
+
+        // Model distribution
+        const modelEl = document.getElementById('modelDist');
+        const modelNames = {efficientnet:'EfficientNet-B7',resnet:'ResNet-50',vit:'ViT-Base'};
+        const modelColors = ['var(--accent)','var(--success)','#8b5cf6'];
+        modelEl.innerHTML = Object.entries(modelNames).map(([k,v], i) => {
+            const count = (stats.model_distribution || {})[k] || 0;
+            const pct = (count/total*100).toFixed(1);
+            return `<div class="prob-bar"><span class="label">${v}</span><div class="bar"><div class="bar-fill" style="width:${pct}%;background:${modelColors[i]}"></div></div><span class="value">${count}</span></div>`;
+        }).join('');
+
+        // Recent table
+        const tbody = document.getElementById('recentTable');
+        if (!stats.recent_analyses.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay análisis aún. <a href="/analysis">Realizar el primero →</a></td></tr>';
+        } else {
+            tbody.innerHTML = stats.recent_analyses.map(a => `<tr>
+                <td>${a.patient_name}</td>
+                <td><span class="badge badge-info">${a.model_used}</span></td>
+                <td>${a.predicted_class_name}</td>
+                <td>${(a.confidence*100).toFixed(1)}%</td>
+                <td>${riskBadge(a.risk_level)}</td>
+                <td>${formatDate(a.created_at)}</td>
+            </tr>`).join('');
+        }
+    } catch (err) { showToast('Error cargando dashboard: ' + err.message, 'error'); }
+}
+loadDashboard();
+</script>
+</body>
+</html>
