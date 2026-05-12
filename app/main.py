@@ -112,14 +112,7 @@ async def serve_patients():
     return FileResponse(os.path.join(frontend_dir, "patients.html"))
 
 
-@app.get("/models-info")
-async def serve_models():
-    return FileResponse(os.path.join(frontend_dir, "models.html"))
 
-
-@app.get("/admin")
-async def serve_admin():
-    return FileResponse(os.path.join(frontend_dir, "admin.html"))
 
 
 # ── Health check ────────────────────────────────────────────────
