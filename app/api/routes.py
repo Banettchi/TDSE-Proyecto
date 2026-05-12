@@ -367,6 +367,24 @@ async def run_analysis(
     )
     fhir_validation = FHIRGenerator.validate_resource(fhir_resource)
 
+    # Convertir tipos numpy a tipos Python nativos
+    import numpy as np
+    def convert_numpy(obj):
+        if isinstance(obj, dict):
+            return {k: convert_numpy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy(v) for v in obj]
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, (np.integer,)):
+            return int(obj)
+        elif isinstance(obj, (np.floating,)):
+            return float(obj)
+        return obj
+
+    inference_result = convert_numpy(inference_result)
+    fhir_resource = convert_numpy(fhir_resource)
+
     # Save analysis to database
     analysis = Analysis(
         tenant_id=tenant.id,
@@ -376,25 +394,25 @@ async def run_analysis(
         processed_image_path=inference_result.get("processed_image_path"),
         gradcam_image_path=inference_result.get("gradcam_image_path"),
         image_source=image_source,
-        image_quality_score=inference_result.get("image_quality_score"),
+        image_quality_score=float(inference_result["image_quality_score"]) if inference_result.get("image_quality_score") is not None else None,
         model_used=inference_result["model_used"],
         model_version="1.0",
-        predicted_class=inference_result["predicted_class"],
+        predicted_class=int(inference_result["predicted_class"]),
         predicted_class_name=inference_result["predicted_class_name"],
-        confidence=inference_result["confidence"],
+        confidence=float(inference_result["confidence"]),
         risk_level=inference_result["risk_level"],
-        is_malignant=inference_result["is_malignant"],
-        class_probabilities=inference_result["class_probabilities"],
+        is_malignant=bool(inference_result["is_malignant"]),
+        class_probabilities={k: float(v) for k, v in inference_result["class_probabilities"].items()},
         abcde_scores=inference_result.get("abcde_scores"),
-        abcde_total=inference_result.get("abcde_scores", {}).get("total_score") if inference_result.get("abcde_scores") else None,
-        asymmetry_score=inference_result.get("abcde_scores", {}).get("asymmetry") if inference_result.get("abcde_scores") else None,
-        border_score=inference_result.get("abcde_scores", {}).get("border") if inference_result.get("abcde_scores") else None,
-        color_score=inference_result.get("abcde_scores", {}).get("color") if inference_result.get("abcde_scores") else None,
-        diameter_mm=inference_result.get("abcde_scores", {}).get("diameter") if inference_result.get("abcde_scores") else None,
-        evolution_score=inference_result.get("abcde_scores", {}).get("evolution") if inference_result.get("abcde_scores") else None,
+        abcde_total=float(inference_result["abcde_scores"]["total_score"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("total_score") is not None else None,
+        asymmetry_score=float(inference_result["abcde_scores"]["asymmetry"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("asymmetry") is not None else None,
+        border_score=float(inference_result["abcde_scores"]["border"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("border") is not None else None,
+        color_score=float(inference_result["abcde_scores"]["color"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("color") is not None else None,
+        diameter_mm=float(inference_result["abcde_scores"]["diameter"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("diameter") is not None else None,
+        evolution_score=float(inference_result["abcde_scores"]["evolution"]) if inference_result.get("abcde_scores") and inference_result["abcde_scores"].get("evolution") is not None else None,
         fhir_observation_id=fhir_resource.get("id"),
         fhir_resource=fhir_resource,
-        inference_time_ms=inference_result["inference_time_ms"],
+        inference_time_ms=float(inference_result["inference_time_ms"]),
         notes=notes
     )
     db.add(analysis)

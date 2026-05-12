@@ -92,6 +92,11 @@ class InferenceEngine:
         temp_preprocessor = ImagePreprocessor(target_size=224)
         is_valid, quality_score, quality_msg = temp_preprocessor.validate_quality(raw_image)
 
+        # Validar que la imagen contenga tonos de piel
+        if not self._is_skin_image(raw_image):
+            raise ValueError("La imagen no parece contener una lesión cutánea. Por favor suba una fotografía de piel.")
+
+
         # ── Step 2: Select model via Router ──
         if model_name:
             router_result = ModelRouter.select_model(
@@ -236,6 +241,29 @@ class InferenceEngine:
 
         risk_map = {1: "bajo", 2: "medio", 3: "alto", 4: "muy_alto"}
         return risk_map.get(min(base_risk, 4), "medio")
+
+    def _is_skin_image(self, image: np.ndarray) -> bool:
+        """
+        Detecta si la imagen contiene tonos de piel humana.
+        Usa detección de color en espacio HSV.
+        """
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        # Rango de tonos de piel en HSV (cubre fototipos I-VI)
+        lower = np.array([0, 15, 50], dtype=np.uint8)
+        upper = np.array([25, 200, 255], dtype=np.uint8)
+        mask1 = cv2.inRange(hsv, lower, upper)
+
+        # Rango extendido para tonos más oscuros
+        lower2 = np.array([160, 15, 50], dtype=np.uint8)
+        upper2 = np.array([180, 200, 255], dtype=np.uint8)
+        mask2 = cv2.inRange(hsv, lower2, upper2)
+
+        skin_mask = mask1 | mask2
+        skin_ratio = np.sum(skin_mask > 0) / (image.shape[0] * image.shape[1])
+
+        # Al menos 15% de la imagen debe ser tono de piel
+        return skin_ratio >= 0.15
 
     def get_available_models(self) -> list:
         """List all available models and their status."""

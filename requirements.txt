@@ -27,7 +27,7 @@ numpy==1.26.4
 grad-cam==1.5.4
 
 # === FHIR ===
-fhir.resources==7.1.4
+fhir.resources==7.1.0
 
 # === Utilities ===
 pydantic==2.10.4
